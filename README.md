@@ -4,7 +4,7 @@
 
 > 当前版本 `0.1.0`，第一阶段（单机部署、进程级会话隔离）。接口协议：`simulation-runtime/v1`。
 >
-> 离线使用手册（PDF）：[docs/simulation-runtime-guide.pdf](docs/simulation-runtime-guide.pdf)
+> 使用速览（PDF）：[docs/simulation-runtime-quickstart.pdf](docs/simulation-runtime-quickstart.pdf) · 完整使用手册（PDF）：[docs/simulation-runtime-guide.pdf](docs/simulation-runtime-guide.pdf)
 
 ## 能力概览
 
