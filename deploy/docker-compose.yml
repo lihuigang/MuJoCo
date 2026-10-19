@@ -1,0 +1,35 @@
+services:
+  simulation-runtime:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: simulation-runtime:0.1.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SIM_RUNTIME_DATA_DIR: /data
+      SIM_RUNTIME_TOKENS_FILE: /run/secrets/tokens.json
+      SIM_RUNTIME_BACKENDS: mujoco_so101
+      SIM_RUNTIME_MAX_SESSIONS: "4"
+      SIM_RUNTIME_MAX_SESSIONS_PER_PROJECT: "2"
+      SIM_RUNTIME_FORWARDED_ALLOW_IPS: 127.0.0.1
+      MUJOCO_GL: egl
+    volumes:
+      - runtime-data:/data
+      - ./tokens.json:/run/secrets/tokens.json:ro
+    shm_size: "1gb"
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  runtime-data:

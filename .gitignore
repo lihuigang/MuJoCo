@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+data/
+examples/output/
+deploy/tokens.json
+deploy/data/
+.DS_Store

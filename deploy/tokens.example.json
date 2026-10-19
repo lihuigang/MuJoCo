@@ -1,0 +1,16 @@
+{
+  "tokens": [
+    {
+      "token": "replace-embodiedevo-token-with-32-random-bytes",
+      "project_id": "embodiedevo",
+      "scopes": ["playground", "test", "typed", "exec"],
+      "max_sessions": 2
+    },
+    {
+      "token": "replace-evaluation-token-with-32-random-bytes",
+      "project_id": "evaluation",
+      "scopes": ["test", "typed"],
+      "max_sessions": 2
+    }
+  ]
+}

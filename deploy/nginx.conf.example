@@ -1,0 +1,38 @@
+# Minimal TLS terminator for simulation-runtime.
+# Replace certificate paths, server_name and upstream address before use.
+
+events {}
+
+http {
+    # Keep request bodies small; exec source is limited to 256 KiB by the
+    # service, and typed actions are much smaller.
+    client_max_body_size 2m;
+
+    server {
+        listen 443 ssl;
+        server_name sim.example.internal;
+
+        ssl_certificate     /etc/ssl/private/sim.crt;
+        ssl_certificate_key /etc/ssl/private/sim.key;
+
+        location / {
+            proxy_pass http://127.0.0.1:8080;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            # Must exceed execution_timeout_sec + request_wait_sec.
+            proxy_read_timeout 180s;
+            proxy_send_timeout 180s;
+            # Do not log bearer tokens.
+            access_log /var/log/nginx/simulation-runtime.access.log;
+        }
+    }
+
+    server {
+        listen 80;
+        server_name sim.example.internal;
+        return 301 https://$host$request_uri;
+    }
+}
