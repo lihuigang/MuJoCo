@@ -17,6 +17,7 @@
     --bad: #ff6b6b;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     background: var(--bg);
@@ -134,7 +135,7 @@
 <body>
 <header>
   <h1>Simulation Runtime<span>仿真画面</span></h1>
-  <form id="connect-form" autocomplete="off">
+  <form id="connect-form" autocomplete="off" hidden>
     <input id="token" type="password" placeholder="项目令牌" size="30" required>
     <button type="submit" id="connect">连接</button>
   </form>
@@ -143,7 +144,7 @@
 <main>
   <section class="toolbar">
     <label for="session-select">会话</label>
-    <select id="session-select" disabled><option value="">先输入令牌并连接</option></select>
+    <select id="session-select" disabled><option value="">正在检测服务…</option></select>
     <label for="seed">种子</label>
     <input id="seed" type="number" min="0" value="0" style="width: 84px" disabled>
     <button id="create" disabled>新建 playground 会话</button>
@@ -183,7 +184,7 @@
   </section>
 
   <p id="instruction"></p>
-  <p class="hint">画面来自最近一次观测，由 SDK / Agent 驱动会话时自动更新。令牌只保存在当前浏览器标签页（sessionStorage），所有请求都带 Bearer 认证，不对外公开。</p>
+  <p class="hint" id="hint">画面来自最近一次观测，由 SDK / Agent 驱动会话时自动更新。</p>
 </main>
 
 <script>
@@ -193,6 +194,7 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     token: "",
+    authMode: "token",
     sessionId: "",
     timer: null,
     sequence: null,
@@ -222,7 +224,9 @@
       throw new Error("无法连接服务: " + err.message);
     }
     if (response.status === 401 || response.status === 403) {
-      throw new Error("令牌无效或权限不足（请确认项目令牌及其作用域）。");
+      throw new Error(state.authMode === "none"
+        ? "服务返回 401/403；免令牌模式下通常来自反向代理或外部访问控制。"
+        : "令牌无效或权限不足（请确认项目令牌及其作用域）。");
     }
     if (!response.ok) {
       let detail = "";
@@ -375,8 +379,12 @@
   }
 
   async function connect(token) {
-    state.token = token.trim();
-    sessionStorage.setItem("simRuntimeToken", state.token);
+    state.token = (token || "").trim();
+    if (state.token) {
+      sessionStorage.setItem("simRuntimeToken", state.token);
+    } else {
+      sessionStorage.removeItem("simRuntimeToken");
+    }
     setError("");
     $("connect").disabled = true;
     try {
@@ -478,11 +486,43 @@
 
   window.addEventListener("beforeunload", stopPolling);
 
-  const savedToken = sessionStorage.getItem("simRuntimeToken");
-  if (savedToken) {
-    $("token").value = savedToken;
-    connect(savedToken).catch((err) => setError(err.message));
+  function applyAuthMode(mode) {
+    state.authMode = mode;
+    const form = $("connect-form");
+    if (mode === "none") {
+      form.hidden = true;
+      $("token").required = false;
+      $("hint").textContent = "服务未启用令牌校验：任何能访问该地址的人都可以查看和操作会话。请仅在内网或受控网络中使用。";
+      $("session-select").innerHTML = '<option value="">正在加载会话…</option>';
+      connect("").catch((err) => {
+        stopPolling();
+        setError(err.message);
+      });
+      return;
+    }
+    form.hidden = false;
+    $("hint").textContent = "画面来自最近一次观测，由 SDK / Agent 驱动会话时自动更新。令牌只保存在当前浏览器标签页（sessionStorage），所有请求都带 Bearer 认证。";
+    const savedToken = sessionStorage.getItem("simRuntimeToken");
+    if (savedToken) {
+      $("token").value = savedToken;
+      connect(savedToken).catch((err) => setError(err.message));
+    } else {
+      $("session-select").innerHTML = '<option value="">输入令牌并连接</option>';
+    }
   }
+
+  async function detectAuthMode() {
+    let mode = "token";
+    try {
+      const info = await api("/v1/auth-mode");
+      if (info && info.mode === "none") mode = "none";
+    } catch (_) {
+      // Older servers do not expose the endpoint; keep the token form.
+    }
+    applyAuthMode(mode);
+  }
+
+  detectAuthMode();
 })();
 </script>
 </body>

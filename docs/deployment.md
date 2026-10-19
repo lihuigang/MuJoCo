@@ -2,7 +2,13 @@
 
 目标是单台 Linux 主机 + Docker Compose，外层反向代理终止 TLS。第一阶段不使用 Kubernetes。
 
-## 1. 准备令牌
+## 1. 认证模式
+
+**默认免令牌**：不配置令牌时服务直接可用（`SIM_RUNTIME_AUTH_MODE=auto` 且没有令牌配置），所有请求映射到公共项目 `public`，拥有全部 scopes。适合单机、内网和快速接入。
+
+免令牌模式下，任何能访问服务端口的人都可以创建会话、执行 `exec` 程序。请只监听回环地址，或通过防火墙/反向代理限制来源。
+
+需要多项目隔离时启用 token 模式：
 
 ```bash
 cd deploy
@@ -19,7 +25,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 - `project_id` 使用稳定、无空格的标识；
 - scopes 按最小权限发放。`exec` 只给可信团队。
 
-修改令牌后需要重启服务（当前没有热更新）。
+修改令牌后需要重启服务（当前没有热更新）。“自动”模式（默认）在检测到令牌配置时会自动进入 token 模式；也可用 `SIM_RUNTIME_AUTH_MODE=token` 强制要求令牌。
 
 ## 2. Docker Compose
 
@@ -31,17 +37,16 @@ docker compose logs -f simulation-runtime
 ```
 
 - 服务只绑定 `127.0.0.1:8080`，由同机反向代理对外。
-- 数据保存在命名卷 `deploy_runtime-data`；令牌以只读方式挂载。
+- 数据保存在命名卷 `deploy_runtime-data`。
+- `docker-compose.yml` 默认设置 `SIM_RUNTIME_AUTH_MODE: none`（免令牌）。启用 token 模式时改为 `token`，并挂载令牌文件、设置 `SIM_RUNTIME_TOKENS_FILE=/run/secrets/tokens.json`。
 - 健康检查请求 `/readyz`；首次启动需要加载 MuJoCo 后端。
 - 容器内设置 `MUJOCO_GL=egl`。若宿主机/驱动不支持 EGL，将环境变量改为 `osmesa`（镜像已安装 `libosmesa6`），或挂载可用 GPU 驱动。
-- 浏览器查看页：`http://127.0.0.1:8080/viewer`，输入令牌后选择或新建会话即可看到双相机画面。若浏览器不在宿主机上，请通过第 3 节的反向代理访问 `https://<域名>/viewer`，不要把明文端口直接暴露到公网。
+- 浏览器查看页：`http://127.0.0.1:8080/viewer`，免令牌模式下直接选择或新建会话即可看到双相机画面。若浏览器不在宿主机上，请通过第 3 节的反向代理访问 `https://<域名>/viewer`，不要在免令牌模式下把明文端口直接暴露到公网。
 
 手动验证：
 
 ```bash
-set -a; . ./.env 2>/dev/null; set +a
-TOKEN=$(python -c "import json; print(json.load(open('tokens.json'))['tokens'][0]['token'])")
-curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/v1/capabilities | python -m json.tool
+curl -s http://127.0.0.1:8080/v1/capabilities | python -m json.tool
 ```
 
 ## 3. TLS 反向代理
@@ -77,9 +82,7 @@ sudo chown simulation:simulation /var/lib/simulation-runtime
 # 将仓库放到 /opt/simulation-runtime，创建 venv 并安装
 sudo -u simulation /opt/simulation-runtime/.venv/bin/pip install '/opt/simulation-runtime[service,mujoco]'
 
-sudo install -m 600 deploy/tokens.json /etc/simulation-runtime/tokens.json
 sudo tee /etc/simulation-runtime/env >/dev/null <<'EOF'
-SIM_RUNTIME_TOKENS_FILE=/etc/simulation-runtime/tokens.json
 SIM_RUNTIME_DATA_DIR=/var/lib/simulation-runtime
 SIM_RUNTIME_HOST=127.0.0.1
 SIM_RUNTIME_PORT=8080
@@ -94,7 +97,7 @@ sudo systemctl enable --now simulation-runtime
 ## 5. 容量与资源
 
 - 每个并发 MuJoCo 会话是一个独立进程，包含模型、渲染器和相机。按 **300–500 MB/会话** 预留内存，再留 1–2 GB 给服务与系统；以实测为准。
-- 默认全局 4 个会话、每项目 2 个。CPU 紧张时先降低上限。
+- 默认全局 4 个会话。token 模式下每个项目默认 2 个；免令牌模式只有一个公共项目，项目上限等同全局上限。CPU 紧张时先降低上限。
 - 渲染需要 OpenGL 上下文；无 GPU 时使用 Mesa 软件渲染，CPU 开销明显。
 - `exec` 程序可能占满 CPU 直到超时；生产环境应限制 `exec` scope 和会话数。
 

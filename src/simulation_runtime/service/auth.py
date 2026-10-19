@@ -1,14 +1,19 @@
-"""Bearer-token authentication with project identity derived server-side."""
+"""Optional bearer-token authentication; anonymous access when disabled."""
 
 from __future__ import annotations
 
 import hmac
 
 from ..core.errors import PermissionDenied, Unauthorized
-from .config import Settings, TokenPolicy
+from .config import SCOPES, Settings, TokenPolicy
+
+OPEN_PROJECT_ID = "public"
+OPEN_POLICY = TokenPolicy(project_id=OPEN_PROJECT_ID, token="", scopes=SCOPES)
 
 
 def authenticate(settings: Settings, authorization: str | None) -> TokenPolicy:
+    if settings.auth_mode == "none":
+        return OPEN_POLICY
     if not authorization or not authorization.startswith("Bearer "):
         raise Unauthorized("Provide a project token as 'Authorization: Bearer <token>'")
     supplied = authorization.removeprefix("Bearer ").strip()

@@ -1,11 +1,12 @@
 # 示例
 
-两个示例都需要一个正在运行的服务和项目令牌：
+两个示例都需要一个正在运行的服务；服务默认免令牌，直接运行即可：
 
 ```bash
 export SIM_RUNTIME_URL=http://127.0.0.1:8080
-export SIM_RUNTIME_TOKEN=<具备 playground + typed 或 playground + exec scope 的令牌>
 export SIM_RUNTIME_SEED=0
+# 仅 token 模式需要：
+# export SIM_RUNTIME_TOKEN=<具备 playground + typed 或 playground + exec scope 的令牌>
 ```
 
 | 文件 | 模式 | 说明 |

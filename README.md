@@ -15,7 +15,8 @@
 - **两个阶段**
   - `playground`：允许 `/reset`，每次重置恢复同一 seed 场景并续满原生动作次数。
   - `test`：禁止重置；用于正式评测。
-- **多项目接入**：Bearer 项目令牌 → 服务端派生 `project_id`；会话、操作、观测、工件全部按项目隔离。
+- **默认免令牌**：不配置令牌即可直接使用，所有请求映射到公共项目；适合单机、内网和快速接入。
+- **可选项目令牌**：设置 `SIM_RUNTIME_AUTH_MODE=token` 后，Bearer 项目令牌 → 服务端派生 `project_id`；会话、操作、观测、工件全部按项目隔离，并可用 scopes 限制能力。
 - **可靠操作**：长操作异步执行（`202` + operation 轮询）、幂等键、超时/崩溃后标记 `outcome_uncertain` 且**绝不重放**动作。
 - **观测工件**：相机帧以 PNG 存储，通过带鉴权的 `/v1/artifacts/{id}` 下载；不暴露服务器文件路径。
 - **零重依赖 SDK**：`simulation_runtime.sdk` 仅使用标准库；服务端仅需 FastAPI + SQLite。
@@ -25,7 +26,7 @@
 
 ```mermaid
 flowchart LR
-  A[任意项目 / EmbodiedEvo] -->|HTTP + Bearer token| B[FastAPI service]
+  A[任意项目 / EmbodiedEvo] -->|HTTP（默认免令牌 / 可选 Bearer token）| B[FastAPI service]
   B --> C[SessionManager]
   C --> D[(SQLite metadata / operations)]
   C --> E[ArtifactStore / PNG]
@@ -49,22 +50,28 @@ flowchart LR
 python -m venv .venv
 .venv/bin/pip install -e '.[service,mujoco]'
 
+export SIM_RUNTIME_DATA_DIR="./data"
+.venv/bin/simulation-runtime serve
+```
+
+服务默认监听 `127.0.0.1:8080`，**默认不校验令牌**。先验证：
+
+```bash
+.venv/bin/simulation-runtime capabilities
+.venv/bin/simulation-runtime smoke                 # 使用 fake 后端走完整链路
+.venv/bin/simulation-runtime backend-smoke --backend mujoco_so101
+```
+
+需要项目隔离时再开启令牌模式：
+
+```bash
+export SIM_RUNTIME_AUTH_MODE=token
 export SIM_RUNTIME_TOKENS_JSON='[{
   "token": "replace-with-a-random-token-at-least-16-chars",
   "project_id": "demo",
   "scopes": ["playground", "test", "typed", "exec"]
 }]'
-export SIM_RUNTIME_DATA_DIR="./data"
 .venv/bin/simulation-runtime serve
-```
-
-服务默认监听 `127.0.0.1:8080`。先验证：
-
-```bash
-export SIM_RUNTIME_TOKEN='replace-with-a-random-token-at-least-16-chars'
-.venv/bin/simulation-runtime capabilities
-.venv/bin/simulation-runtime smoke                 # 使用 fake 后端走完整链路
-.venv/bin/simulation-runtime backend-smoke --backend mujoco_so101
 ```
 
 ## Python SDK
@@ -72,7 +79,7 @@ export SIM_RUNTIME_TOKEN='replace-with-a-random-token-at-least-16-chars'
 ```python
 from simulation_runtime.sdk import Client
 
-client = Client("http://127.0.0.1:8080", token="...")
+client = Client("http://127.0.0.1:8080")  # 令牌模式下传入 token="..."
 
 with client.session(
     backend="mujoco_so101", task="pick_cube",
@@ -113,23 +120,25 @@ print(get_instruction())
 http://127.0.0.1:8080/viewer
 ```
 
-输入项目令牌后即可选择已有会话，或直接新建 playground 会话；页面每 0.5–2 秒拉取最新观测，并排显示 `top_cam` / `wrist_cam` 两路画面，同时展示成功状态、动作预算和观测序号，还支持重置与关闭会话。
+打开页面即可选择已有会话，或直接新建 playground 会话；页面每 0.5–2 秒拉取最新观测，并排显示 `top_cam` / `wrist_cam` 两路画面，同时展示成功状态、动作预算和观测序号，还支持重置与关闭会话。
 
 ![查看页](docs/viewer-screenshot.png)
 
-- 页面本身无鉴权，但所有数据请求都带 `Authorization: Bearer`，令牌只保存在当前标签页的 `sessionStorage`，不会写入服务端或 URL。
+- 默认免令牌模式不显示令牌输入框，打开页面直接加载会话。启用 `SIM_RUNTIME_AUTH_MODE=token` 时才会要求输入项目令牌，令牌只保存在当前标签页的 `sessionStorage`。
+- 免令牌模式下，任何能访问该端口的人都可以查看和操作会话；请只绑定回环地址或可信内网。
 - 查看是被动的：画面随 SDK / Agent 驱动的会话更新；页面不会自动步进。
 - Docker 部署时，compose 默认只绑定 `127.0.0.1:8080`。若浏览器在另一台机器，请通过 `deploy/nginx.conf.example` 的反向代理访问，或自行调整端口绑定并确保只在内网暴露。
 
 ## HTTP API
 
-所有 `/v1` 接口需要 `Authorization: Bearer <project-token>`。
+默认无需认证。启用 token 模式后，除 `/v1/auth-mode` 外的 `/v1` 接口需要 `Authorization: Bearer <project-token>`。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/healthz` | 存活探针（无鉴权） |
 | GET | `/readyz` | 后端/存储就绪探针（无鉴权） |
-| GET | `/viewer` | 浏览器查看页（页面无鉴权，数据请求需令牌） |
+| GET | `/viewer` | 浏览器查看页（无鉴权） |
+| GET | `/v1/auth-mode` | 当前认证模式：`none` 或 `token` |
 | GET | `/v1/capabilities` | 后端、任务、动作 schema、限制 |
 | POST | `/v1/sessions` | 创建会话，返回会话与初始观测 |
 | GET | `/v1/sessions` | 列出本项目会话 |
@@ -149,12 +158,13 @@ http://127.0.0.1:8080/viewer
 
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `SIM_RUNTIME_TOKENS_FILE` / `SIM_RUNTIME_TOKENS_JSON` | 必填 | 项目令牌列表（JSON） |
+| `SIM_RUNTIME_AUTH_MODE` | `auto` | `none` 免令牌；`token` 强制令牌；`auto` 配置了令牌就用令牌，否则免令牌 |
+| `SIM_RUNTIME_TOKENS_FILE` / `SIM_RUNTIME_TOKENS_JSON` | 无 | 可选的项目令牌列表（JSON），配置后 `auto` 进入 token 模式 |
 | `SIM_RUNTIME_DATA_DIR` | `./data` | SQLite 与工件目录 |
 | `SIM_RUNTIME_BACKENDS` | `mujoco_so101` | 启用的后端，逗号分隔 |
 | `SIM_RUNTIME_HOST` / `SIM_RUNTIME_PORT` | `127.0.0.1` / `8080` | 监听地址 |
 | `SIM_RUNTIME_MAX_SESSIONS` | `4` | 全局并发会话上限 |
-| `SIM_RUNTIME_MAX_SESSIONS_PER_PROJECT` | `2` | 单项目并发会话上限 |
+| `SIM_RUNTIME_MAX_SESSIONS_PER_PROJECT` | `2` | 单项目并发会话上限（仅 token 模式生效） |
 | `SIM_RUNTIME_DEFAULT_EXEC_BUDGET` | `100` | exec 会话默认执行次数 |
 | `SIM_RUNTIME_MAX_EXEC_BUDGET` | `1000` | 单会话执行次数上限 |
 | `SIM_RUNTIME_EXEC_TIMEOUT_SEC` | `60` | 单次程序执行上限 |
@@ -162,7 +172,7 @@ http://127.0.0.1:8080/viewer
 | `SIM_RUNTIME_SESSION_IDLE_TTL_SEC` | `900` | 空闲会话回收时间 |
 | `SIM_RUNTIME_SESSION_MAX_LIFETIME_SEC` | `3600` | 会话最长生命周期 |
 
-令牌文件示例见 `deploy/tokens.example.json`。修改令牌后重启服务生效。
+令牌文件示例见 `deploy/tokens.example.json`。修改令牌后重启服务生效。免令牌模式忽略令牌配置。
 
 ## 测试
 
@@ -179,18 +189,17 @@ MUJOCO_GL=egl .venv/bin/python -m pytest -q     # Linux 无显示环境
 
 ```bash
 cd deploy
-cp tokens.example.json tokens.json             # 写入真实令牌
 docker compose up -d --build
 ```
 
-启动后浏览 `http://127.0.0.1:8080/viewer` 即可查看仿真画面（输入项目令牌）。
+启动后浏览 `http://127.0.0.1:8080/viewer` 即可查看仿真画面，无需输入令牌。需要项目隔离时，在 `deploy/docker-compose.yml` 中把 `SIM_RUNTIME_AUTH_MODE` 改为 `token`，并将 `tokens.json` 以只读方式挂载到 `/run/secrets/tokens.json`，同时设置 `SIM_RUNTIME_TOKENS_FILE=/run/secrets/tokens.json`。
 
-TLS 由外层反向代理终止（示例 `deploy/nginx.conf.example`），不要直接暴露明文端口。详见 `docs/deployment.md`。
+TLS 由外层反向代理终止（示例 `deploy/nginx.conf.example`）。免令牌模式下任何能访问端口的人都有完整控制权，不要把明文端口直接暴露到公网。详见 `docs/deployment.md`。
 
 ## 安全边界（摘要）
 
-- 令牌必须通过环境变量或文件注入，服务不会在日志/数据库/响应中返回令牌。
-- 会话、操作、观测、工件均按项目隔离；其他项目 ID 返回 `404`。
+- 默认免令牌模式下，任何能访问服务端口的人都可以创建会话、执行 `exec` 程序。请只监听回环地址或可信内网；多项目/多人场景请启用 token 模式。
+- token 模式下，会话、操作、观测、工件均按项目隔离；其他项目 ID 返回 `404`。令牌不会出现在日志、数据库或响应中。
 - `exec` 是**协作式沙箱**，不是容器安全边界；仅向可信团队开放 `exec` scope。对其他团队只发放 `playground,typed` 或 `test,typed`。
 - 当前版本没有每会话容器、cgroup/内存上限、审计导出和令牌热更新；这些属于后续阶段。
 - 单实例 SQLite + 本地卷，不支持水平扩展。

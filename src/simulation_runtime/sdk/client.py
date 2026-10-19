@@ -73,17 +73,15 @@ class Client:
     def __init__(
         self,
         base_url: str,
-        token: str,
+        token: str | None = None,
         *,
         timeout: float = 30.0,
         user_agent: str = "simulation-runtime-sdk/0.1",
     ):
         if not base_url:
             raise ValueError("base_url is required")
-        if not token:
-            raise ValueError("token is required")
         self.base_url = base_url.rstrip("/")
-        self.token = token
+        self.token = token or None
         self.timeout = timeout
         self.user_agent = user_agent
 
@@ -111,10 +109,11 @@ class Client:
     ) -> Any:
         data = None
         headers = {
-            "Authorization": f"Bearer {self.token}",
             "Accept": "application/json" if not raw else "*/*",
             "User-Agent": self.user_agent,
         }
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
         if body is not None:
             data = json.dumps(_encode(body), separators=(",", ":")).encode("utf-8")
             headers["Content-Type"] = "application/json"

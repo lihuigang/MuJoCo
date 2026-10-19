@@ -1,12 +1,16 @@
 # HTTP API (`simulation-runtime/v1`)
 
-Base URL 由部署决定，例如 `https://sim.example.internal`。除静态页面 `/`、`/viewer` 与探针 `/healthz`、`/readyz` 外，所有接口要求：
+Base URL 由部署决定，例如 `https://sim.example.internal`。**默认免令牌**：所有接口可直接访问，身份为公共项目 `public`，拥有全部 scopes。
+
+启用 token 模式（`SIM_RUNTIME_AUTH_MODE=token`）后，除静态页面 `/`、`/viewer`、`/v1/auth-mode` 与探针 `/healthz`、`/readyz` 外，所有接口要求：
 
 ```
 Authorization: Bearer <project-token>
 ```
 
 令牌对应的 `project_id` 与 scopes 完全由服务端配置决定，客户端不能覆盖。跨项目访问统一返回 `404`，避免泄露资源是否存在。
+
+当前模式可随时通过 `GET /v1/auth-mode` 查询。
 
 ## 通用约定
 
@@ -30,11 +34,21 @@ Authorization: Bearer <project-token>
 
 检查启用的后端能否加载、SQLite 能否查询。就绪返回 `200 {"ok": true}`；否则 `503 {"ok": false, "errors": {...}}`。
 
+### `GET /v1/auth-mode`
+
+无鉴权。返回当前认证模式：
+
+```json
+{"mode": "none", "token_required": false}
+```
+
+`mode` 为 `none`（默认，免令牌）或 `token`（需要 Bearer 令牌）。
+
 ## 查看页面
 
 ### `GET /`、`GET /viewer`
 
-`/` 重定向到 `/viewer`。页面本身无鉴权（只返回静态 HTML），但页面内的数据请求仍按下方约定携带 Bearer 令牌。页面保存在浏览器标签页的 `sessionStorage` 中，不会出现在 URL 或服务端日志里。它轮询会话状态与最新观测，并排显示 `top_cam` / `wrist_cam`，支持新建 playground 会话、重置和关闭。
+`/` 重定向到 `/viewer`。页面本身无鉴权（只返回静态 HTML），会先请求 `/v1/auth-mode`：免令牌模式下直接加载会话，不显示令牌输入框；token 模式下显示令牌输入框，并把令牌保存在浏览器标签页的 `sessionStorage` 中，不会出现在 URL 或服务端日志里。它轮询会话状态与最新观测，并排显示 `top_cam` / `wrist_cam`，支持新建 playground 会话、重置和关闭。
 
 ## 能力
 
@@ -85,7 +99,7 @@ Authorization: Bearer <project-token>
 }
 ```
 
-`features.exec` 反映当前令牌是否拥有 `exec` scope。后端加载失败时，对应条目为 `{"name": ..., "unavailable": true, "error": ...}`。
+`features.exec` 在免令牌模式下始终为 `true`；token 模式下反映当前令牌是否拥有 `exec` scope。后端加载失败时，对应条目为 `{"name": ..., "unavailable": true, "error": ...}`。
 
 ## 会话
 
@@ -322,7 +336,7 @@ Authorization: Bearer <project-token>
 | HTTP | `code` | 含义 |
 | --- | --- | --- |
 | 400 | `invalid_request` | 参数/schema 错误 |
-| 401 | `unauthorized` | 缺失或无效令牌 |
+| 401 | `unauthorized` | 缺失或无效令牌（仅 token 模式） |
 | 403 | `forbidden` | scope 不足，或在 test 阶段重置 |
 | 404 | `not_found` | 资源不存在或不属于本项目 |
 | 409 | `budget_exhausted` | 执行预算耗尽（同步阶段） |

@@ -15,8 +15,8 @@ simulation_runtime/
 │   └── fake.py           确定性测试后端
 ├── service/
 │   ├── app.py            FastAPI 路由与错误映射
-│   ├── auth.py           Bearer → project_id + scopes
-│   ├── config.py         令牌、限制、环境变量
+│   ├── auth.py           可选 Bearer → project_id + scopes；默认公共项目
+│   ├── config.py         认证模式、令牌、限制、环境变量
 │   ├── manager.py        会话生命周期、worker、操作队列、回收
 │   ├── worker.py         每个会话一个进程
 │   ├── store.py          SQLite 元数据/操作/观测/工件索引

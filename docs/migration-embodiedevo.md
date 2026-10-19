@@ -14,7 +14,7 @@
 | `session-result.json` / `ledger.jsonl` | 会话状态 + operation 历史（SQLite） |
 | `workspace/observations/NNNNNN` 反馈目录 | 观测元数据 + `/v1/artifacts/{id}` PNG |
 | 本地 MuJoCo、模型资产、反馈视频 | 服务端 MuJoCo；不再需要资产副本 |
-| 本地 token/socket 鉴权 | 项目 Bearer 令牌 + HTTPS |
+| 本地 token/socket 鉴权 | 默认免令牌（内网）；可选 Bearer 令牌 + HTTPS |
 
 会话语义保持一致：
 
@@ -31,8 +31,8 @@ import os
 from simulation_runtime.sdk import Client
 
 client = Client(
-    os.environ["SIM_RUNTIME_URL"],        # 例如 https://sim.example.internal
-    os.environ["SIM_RUNTIME_TOKEN"],
+    os.environ["SIM_RUNTIME_URL"],            # 例如 https://sim.example.internal
+    os.environ.get("SIM_RUNTIME_TOKEN"),      # token 模式才需要
 )
 
 with client.session(
@@ -78,7 +78,7 @@ client.execute(session_id, code)
 
 ## 评测隔离
 
-建议为 EmbodiedEvo 的不同用途创建独立项目和令牌：
+默认免令牌模式下所有调用方共享公共项目。多个团队/用途共享同一服务时，建议启用 token 模式，并为 EmbodiedEvo 的不同用途创建独立项目和令牌：
 
 ```json
 {

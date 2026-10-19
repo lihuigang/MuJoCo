@@ -1,8 +1,9 @@
 """HTTP API for the standalone simulation runtime.
 
-Every project gets its own bearer token. Authentication maps a token to a
-project id and a set of scopes; all session and artifact lookups are scoped by
-that project id, so IDs from another project resolve as ``404``.
+Authentication is optional. In the default open mode every request maps to a
+single public project with all scopes. In token mode each bearer token maps to
+a configured project id and scopes; all session and artifact lookups are scoped
+by that project id, so IDs from another project resolve as ``404``.
 """
 
 from __future__ import annotations
@@ -159,8 +160,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.artifacts = artifacts
         app.state.manager = manager
         LOGGER.info(
-            "simulation-runtime %s serving %d project token(s)", __version__, len(active.tokens)
+            "simulation-runtime %s starting with auth mode %r", __version__, active.auth_mode
         )
+        if active.auth_mode == "none":
+            LOGGER.warning(
+                "authentication is disabled: anyone who can reach this port has full access"
+            )
         try:
             yield
         finally:
@@ -298,6 +303,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             response.status_code = 503
             return {"ok": False, "errors": errors}
         return {"ok": True}
+
+    @app.get("/v1/auth-mode")
+    def auth_mode(request: Request) -> dict[str, Any]:
+        active: Settings = request.app.state.settings
+        return {"mode": active.auth_mode, "token_required": active.auth_mode == "token"}
 
     @app.get("/v1/capabilities")
     def capabilities(

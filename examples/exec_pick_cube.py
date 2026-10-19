@@ -4,7 +4,7 @@ The program keeps state across executions and uses only the four primitives
 (get_instruction, get_observation, step, reset) plus numpy/math. Set:
 
     SIM_RUNTIME_URL=https://sim.example.internal
-    SIM_RUNTIME_TOKEN=<project token with playground + exec scopes>
+    SIM_RUNTIME_TOKEN=<optional: project token in token mode>
 """
 
 from __future__ import annotations
@@ -39,7 +39,9 @@ print("cube height", float(np.round(get_observation()["state"]["ee_pose"][2], 4)
 
 
 def main() -> None:
-    client = Client(os.environ["SIM_RUNTIME_URL"], os.environ["SIM_RUNTIME_TOKEN"])
+    client = Client(
+        os.environ["SIM_RUNTIME_URL"], os.environ.get("SIM_RUNTIME_TOKEN")
+    )
     OUTPUT.mkdir(exist_ok=True)
 
     with client.session(

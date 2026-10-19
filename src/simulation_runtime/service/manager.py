@@ -238,8 +238,7 @@ class SessionManager:
                 "live_viewer": True,
             },
             "limits": {
-                "max_sessions_per_project": policy.max_sessions
-                or self.settings.max_sessions_per_project,
+                "max_sessions_per_project": self.settings.project_session_limit(policy),
                 "execution_timeout_sec": self.settings.execution_timeout_sec,
                 "request_wait_sec": self.settings.request_wait_sec,
             },
@@ -315,7 +314,7 @@ class SessionManager:
             raise InvalidRequest(
                 f"unknown task {task!r}; available: {sorted(tasks)}"
             )
-        project_limit = policy.max_sessions or self.settings.max_sessions_per_project
+        project_limit = self.settings.project_session_limit(policy)
         if mode == "exec":
             budget = self.settings.default_exec_budget if exec_budget is None else exec_budget
             if type(budget) is not int or budget <= 0:

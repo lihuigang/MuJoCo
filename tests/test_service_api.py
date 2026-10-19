@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from simulation_runtime.service.app import create_app
-from simulation_runtime.service.config import Settings, TokenPolicy
+from simulation_runtime.service.config import Settings, TokenPolicy, load_settings
 
 ALPHA = "alpha-token-0123456789abcdef"
 BETA = "beta-token-0123456789abcdef"
@@ -79,6 +79,7 @@ def operation(response):
 def test_auth_and_capabilities(client):
     assert client.get("/healthz").json() == {"ok": True}
     assert client.get("/readyz").json() == {"ok": True}
+    assert client.get("/v1/auth-mode").json() == {"mode": "token", "token_required": True}
 
     response = client.get("/v1/capabilities")
     assert response.status_code == 401
@@ -92,6 +93,85 @@ def test_auth_and_capabilities(client):
     assert payload["features"]["exec"] is True
     assert [item["name"] for item in payload["backends"]] == ["fake"]
     assert payload["limits"]["max_sessions_per_project"] == 2
+
+
+def test_auth_disabled_allows_tokenless_access(tmp_path):
+    app = create_app(make_settings(tmp_path, auth_mode="none", tokens=()))
+    with TestClient(app) as open_client:
+        assert open_client.get("/v1/auth-mode").json() == {
+            "mode": "none",
+            "token_required": False,
+        }
+        capabilities = open_client.get("/v1/capabilities")
+        assert capabilities.status_code == 200
+        assert capabilities.json()["features"]["exec"] is True
+        assert capabilities.json()["limits"]["max_sessions_per_project"] == 4
+
+        response = open_client.post(
+            "/v1/sessions",
+            json={
+                "backend": "fake",
+                "task": "reach",
+                "phase": "playground",
+                "mode": "typed",
+                "seed": 3,
+            },
+        )
+        assert response.status_code == 201, response.text
+        session = response.json()["session"]
+        assert session["project_id"] == "public"
+        session_id = session["session_id"]
+
+        assert open_client.get(f"/v1/sessions/{session_id}").status_code == 200
+        step = open_client.post(
+            f"/v1/sessions/{session_id}/steps", json={"action": HOLD}
+        )
+        assert operation(step)["status"] == "succeeded"
+        reset = open_client.post(f"/v1/sessions/{session_id}/reset", json={})
+        assert operation(reset)["status"] == "succeeded"
+
+
+def test_load_settings_defaults_to_open_mode(tmp_path):
+    settings = load_settings({"SIM_RUNTIME_DATA_DIR": str(tmp_path / "data")})
+    assert settings.auth_mode == "none"
+    assert settings.tokens == ()
+
+    ignored = load_settings(
+        {
+            "SIM_RUNTIME_DATA_DIR": str(tmp_path / "ignored"),
+            "SIM_RUNTIME_AUTH_MODE": "none",
+            "SIM_RUNTIME_TOKENS_JSON": "not-json",
+        }
+    )
+    assert ignored.auth_mode == "none"
+    assert ignored.tokens == ()
+
+
+def test_load_settings_token_mode_requires_tokens(tmp_path):
+    with pytest.raises(ValueError):
+        load_settings(
+            {
+                "SIM_RUNTIME_DATA_DIR": str(tmp_path / "missing"),
+                "SIM_RUNTIME_AUTH_MODE": "token",
+            }
+        )
+
+    settings = load_settings(
+        {
+            "SIM_RUNTIME_DATA_DIR": str(tmp_path / "configured"),
+            "SIM_RUNTIME_TOKENS_JSON": json.dumps(
+                [
+                    {
+                        "token": ALPHA,
+                        "project_id": "alpha",
+                        "scopes": ["playground", "typed"],
+                    }
+                ]
+            ),
+        }
+    )
+    assert settings.auth_mode == "token"
+    assert settings.tokens[0].project_id == "alpha"
 
 
 def test_typed_session_lifecycle_and_artifacts(client):

@@ -9,7 +9,7 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       SIM_RUNTIME_DATA_DIR: /data
-      SIM_RUNTIME_TOKENS_FILE: /run/secrets/tokens.json
+      SIM_RUNTIME_AUTH_MODE: none
       SIM_RUNTIME_BACKENDS: mujoco_so101
       SIM_RUNTIME_MAX_SESSIONS: "4"
       SIM_RUNTIME_MAX_SESSIONS_PER_PROJECT: "2"
@@ -17,7 +17,6 @@ services:
       MUJOCO_GL: egl
     volumes:
       - runtime-data:/data
-      - ./tokens.json:/run/secrets/tokens.json:ro
     shm_size: "1gb"
     stop_grace_period: 30s
     healthcheck:

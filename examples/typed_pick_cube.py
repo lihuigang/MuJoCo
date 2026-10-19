@@ -4,7 +4,7 @@ This is an integration example, not a trained policy: it uses a fixed script
 and may not solve the task for every seed. Set:
 
     SIM_RUNTIME_URL=https://sim.example.internal
-    SIM_RUNTIME_TOKEN=<project token with playground + typed scopes>
+    SIM_RUNTIME_TOKEN=<optional: project token in token mode>
 """
 
 from __future__ import annotations
@@ -26,7 +26,9 @@ def move(session, position, gripper, repeat=4):
 
 
 def main() -> None:
-    client = Client(os.environ["SIM_RUNTIME_URL"], os.environ["SIM_RUNTIME_TOKEN"])
+    client = Client(
+        os.environ["SIM_RUNTIME_URL"], os.environ.get("SIM_RUNTIME_TOKEN")
+    )
     OUTPUT.mkdir(exist_ok=True)
 
     with client.session(

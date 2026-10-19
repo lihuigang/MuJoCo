@@ -13,11 +13,7 @@ from .sdk import Client, SimulationError
 
 
 def _client(args: argparse.Namespace) -> Client:
-    token = args.token or os.environ.get(args.token_env, "")
-    if not token:
-        raise SystemExit(
-            f"provide --token or set {args.token_env} to a project token"
-        )
+    token = args.token or os.environ.get(args.token_env) or None
     return Client(args.url, token, timeout=args.timeout)
 
 
@@ -27,7 +23,7 @@ def _add_client_options(parser: argparse.ArgumentParser) -> None:
         default=os.environ.get("SIM_RUNTIME_URL", "http://127.0.0.1:8080"),
         help="service base URL (default: %(default)s)",
     )
-    parser.add_argument("--token", default=None, help="project bearer token")
+    parser.add_argument("--token", default=None, help="optional project bearer token")
     parser.add_argument(
         "--token-env",
         default="SIM_RUNTIME_TOKEN",

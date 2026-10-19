@@ -1,4 +1,4 @@
-"""Service settings and project-token policy loading."""
+"""Service settings and optional project-token policy loading."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 SCOPES = frozenset({"playground", "test", "typed", "exec"})
 DEFAULT_SCOPES = frozenset({"playground", "typed"})
 MIN_TOKEN_LENGTH = 16
+AUTH_MODES = frozenset({"none", "token"})
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,8 @@ class TokenPolicy:
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
-    tokens: tuple[TokenPolicy, ...]
+    tokens: tuple[TokenPolicy, ...] = ()
+    auth_mode: str = "token"
     backends: tuple[str, ...] = ("mujoco_so101",)
     max_sessions: int = 4
     max_sessions_per_project: int = 2
@@ -41,8 +43,10 @@ class Settings:
     reap_interval_sec: float = 30.0
 
     def __post_init__(self):
-        if not self.tokens:
-            raise ValueError("at least one project token is required")
+        if self.auth_mode not in AUTH_MODES:
+            raise ValueError(f"auth_mode must be one of {sorted(AUTH_MODES)}")
+        if self.auth_mode == "token" and not self.tokens:
+            raise ValueError("at least one project token is required when auth_mode is 'token'")
         if self.max_sessions <= 0 or self.max_sessions_per_project <= 0:
             raise ValueError("session capacity must be positive")
         if self.default_exec_budget < 0 or self.max_exec_budget < self.default_exec_budget:
@@ -54,6 +58,11 @@ class Settings:
         if scope is None:
             return self.tokens
         return tuple(policy for policy in self.tokens if policy.allows(scope))
+
+    def project_session_limit(self, policy: TokenPolicy) -> int:
+        if self.auth_mode == "none":
+            return self.max_sessions
+        return policy.max_sessions or self.max_sessions_per_project
 
 
 def _policy_from_dict(payload: dict, *, require_strong: bool) -> TokenPolicy:
@@ -131,9 +140,24 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         raw = env.get(name)
         return default if raw is None or raw == "" else cast(raw)
 
+    auth_raw = (env.get("SIM_RUNTIME_AUTH_MODE") or "auto").strip().lower()
+    if auth_raw not in {"auto", "none", "token"}:
+        raise ValueError("SIM_RUNTIME_AUTH_MODE must be 'auto', 'none' or 'token'")
+    has_token_config = bool(
+        env.get("SIM_RUNTIME_TOKENS_JSON") or env.get("SIM_RUNTIME_TOKENS_FILE")
+    )
+    # auto: keep configured tokens protected, otherwise run without auth.
+    auth_mode = ("token" if has_token_config else "none") if auth_raw == "auto" else auth_raw
+    tokens = (
+        parse_tokens(_load_token_payload(env))
+        if auth_mode == "token" and has_token_config
+        else ()
+    )
+
     return Settings(
         data_dir=data_dir,
-        tokens=parse_tokens(_load_token_payload(env)),
+        tokens=tokens,
+        auth_mode=auth_mode,
         backends=backends,
         max_sessions=number("SIM_RUNTIME_MAX_SESSIONS", 4, int),
         max_sessions_per_project=number("SIM_RUNTIME_MAX_SESSIONS_PER_PROJECT", 2, int),
