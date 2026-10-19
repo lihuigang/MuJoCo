@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulation Runtime · 仿真画面</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e1116;
+    --panel: #171c24;
+    --border: #2a3240;
+    --text: #e6ebf2;
+    --muted: #8b98a9;
+    --accent: #4da3ff;
+    --ok: #3ddc84;
+    --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: #12161d;
+  }
+  header h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  header h1 span { color: var(--muted); font-weight: 400; margin-left: 8px; }
+  #connect-form { display: flex; gap: 8px; }
+  input, select, button {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 11px;
+  }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  main { max-width: 1180px; margin: 0 auto; padding: 18px 20px 40px; }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    padding: 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .toolbar label { color: var(--muted); }
+  .toolbar select { max-width: 380px; }
+  .toolbar .spacer { flex: 1; }
+  #error {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(255, 107, 107, .12);
+    border: 1px solid rgba(255, 107, 107, .4);
+    color: #ffb3b3;
+    white-space: pre-wrap;
+  }
+  .status {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .card {
+    padding: 10px 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .card .label { color: var(--muted); font-size: 12px; }
+  .card .value {
+    margin-top: 3px;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .value.ok { color: var(--ok); }
+  .value.bad { color: var(--bad); }
+  .cameras {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  }
+  figure {
+    margin: 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  figure .frame {
+    aspect-ratio: 1 / 1;
+    display: grid;
+    place-items: center;
+    background:
+      repeating-conic-gradient(#1a2028 0% 25%, #141922 0% 50%) 50% / 28px 28px;
+  }
+  figure img { width: 100%; height: 100%; object-fit: contain; display: none; }
+  figure img.loaded { display: block; }
+  figure img.empty { display: none; }
+  figure figcaption {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+  }
+  #instruction { margin: 14px 0 0; color: var(--muted); }
+  .hint { margin-top: 10px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 640px) {
+    header { padding: 12px; }
+    #connect-form { width: 100%; }
+    #connect-form input { flex: 1; }
+    main { padding: 12px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Simulation Runtime<span>仿真画面</span></h1>
+  <form id="connect-form" autocomplete="off">
+    <input id="token" type="password" placeholder="项目令牌" size="30" required>
+    <button type="submit" id="connect">连接</button>
+  </form>
+</header>
+
+<main>
+  <section class="toolbar">
+    <label for="session-select">会话</label>
+    <select id="session-select" disabled><option value="">先输入令牌并连接</option></select>
+    <label for="seed">种子</label>
+    <input id="seed" type="number" min="0" value="0" style="width: 84px" disabled>
+    <button id="create" disabled>新建 playground 会话</button>
+    <span class="spacer"></span>
+    <button id="refresh" disabled>刷新</button>
+    <button id="reset" disabled>重置场景</button>
+    <button id="close" disabled>关闭会话</button>
+    <label><input id="auto" type="checkbox" checked> 自动刷新</label>
+    <select id="interval" aria-label="刷新间隔">
+      <option value="500">0.5 秒</option>
+      <option value="1000" selected>1 秒</option>
+      <option value="2000">2 秒</option>
+    </select>
+  </section>
+
+  <p id="error" hidden></p>
+
+  <section class="status">
+    <div class="card"><div class="label">状态</div><div class="value" id="st-state">—</div></div>
+    <div class="card"><div class="label">任务成功</div><div class="value" id="st-success">—</div></div>
+    <div class="card"><div class="label">阶段 / 模式</div><div class="value" id="st-phase">—</div></div>
+    <div class="card"><div class="label">原生动作</div><div class="value" id="st-steps">—</div></div>
+    <div class="card"><div class="label">exec 预算</div><div class="value" id="st-exec">—</div></div>
+    <div class="card"><div class="label">观测序号</div><div class="value" id="st-sequence">—</div></div>
+    <div class="card"><div class="label">会话 ID</div><div class="value" id="st-session">—</div></div>
+  </section>
+
+  <section class="cameras">
+    <figure>
+      <div class="frame"><img id="top_cam" alt="top_cam 相机画面"></div>
+      <figcaption>top_cam · 全局视角</figcaption>
+    </figure>
+    <figure>
+      <div class="frame"><img id="wrist_cam" alt="wrist_cam 相机画面"></div>
+      <figcaption>wrist_cam · 腕部视角</figcaption>
+    </figure>
+  </section>
+
+  <p id="instruction"></p>
+  <p class="hint">画面来自最近一次观测，由 SDK / Agent 驱动会话时自动更新。令牌只保存在当前浏览器标签页（sessionStorage），所有请求都带 Bearer 认证，不对外公开。</p>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    token: "",
+    sessionId: "",
+    timer: null,
+    sequence: null,
+    urls: {},
+    busy: false,
+  };
+
+  function setError(message) {
+    const node = $("error");
+    if (!message) {
+      node.hidden = true;
+      node.textContent = "";
+      return;
+    }
+    node.hidden = false;
+    node.textContent = message;
+  }
+
+  async function api(path, options = {}) {
+    const headers = Object.assign({}, options.headers || {});
+    if (state.token) headers["Authorization"] = "Bearer " + state.token;
+    if (options.body !== undefined) headers["Content-Type"] = "application/json";
+    let response;
+    try {
+      response = await fetch(path, Object.assign({}, options, { headers }));
+    } catch (err) {
+      throw new Error("无法连接服务: " + err.message);
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("令牌无效或权限不足（请确认项目令牌及其作用域）。");
+    }
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const payload = await response.json();
+        detail = (payload.error && payload.error.message) || JSON.stringify(payload);
+      } catch (_) {
+        detail = response.statusText;
+      }
+      throw new Error(response.status + " " + detail);
+    }
+    if (options.raw) return response.blob();
+    return response.json();
+  }
+
+  function stopPolling() {
+    if (state.timer !== null) {
+      clearTimeout(state.timer);
+      state.timer = null;
+    }
+  }
+
+  function schedule() {
+    stopPolling();
+    if (!$("auto").checked || !state.sessionId) return;
+    state.timer = setTimeout(async () => {
+      await tick();
+      schedule();
+    }, Number($("interval").value));
+  }
+
+  async function tick() {
+    if (!state.sessionId || state.busy) return;
+    const id = encodeURIComponent(state.sessionId);
+    try {
+      const status = await api("/v1/sessions/" + id);
+      renderStatus(status);
+      const observation = await api("/v1/sessions/" + id + "/observation");
+      if (observation.sequence !== state.sequence) {
+        state.sequence = observation.sequence;
+        await renderObservation(observation);
+      }
+      setError("");
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function renderStatus(status) {
+    $("st-state").textContent = status.state +
+      (status.reason && status.reason !== status.state ? " (" + status.reason + ")" : "");
+    $("st-state").className = "value " + (status.state === "closed" ? "bad" : "ok");
+    $("st-success").textContent = status.success ? "已成功" : "未完成";
+    $("st-success").className = "value " + (status.success ? "ok" : "");
+    $("st-phase").textContent = status.phase + " / " + status.mode;
+    $("st-steps").textContent = status.native_steps_used + " / " + status.native_action_limit;
+    $("st-exec").textContent = status.executions_used + " / " + status.execution_budget;
+    $("st-sequence").textContent = String(status.observation_sequence);
+    $("st-session").textContent = status.session_id;
+
+    const closed = status.state === "closed";
+    const playground = status.phase === "playground";
+    $("reset").disabled = closed || !playground;
+    $("close").disabled = closed;
+    $("reset").title = playground ? "" : "test 阶段不允许重置";
+  }
+
+  async function renderObservation(observation) {
+    $("instruction").textContent = observation.instruction || "";
+    const cameras = observation.cameras || {};
+    const names = ["top_cam", "wrist_cam"];
+    await Promise.all(names.map(async (name) => {
+      const image = $(name);
+      const info = cameras[name];
+      if (!image || !info) {
+        if (image) image.className = "empty";
+        return;
+      }
+      const blob = await api(info.href, { raw: true });
+      const url = URL.createObjectURL(blob);
+      const previous = state.urls[name];
+      state.urls[name] = url;
+      image.src = url;
+      image.className = "loaded";
+      if (previous) URL.revokeObjectURL(previous);
+    }));
+  }
+
+  function clearCameras() {
+    for (const name of Object.keys(state.urls)) {
+      URL.revokeObjectURL(state.urls[name]);
+      delete state.urls[name];
+    }
+    for (const name of ["top_cam", "wrist_cam"]) {
+      const image = $(name);
+      if (image) {
+        image.removeAttribute("src");
+        image.className = "";
+      }
+    }
+    state.sequence = null;
+    $("instruction").textContent = "";
+  }
+
+  async function refreshSessions(selected) {
+    const data = await api("/v1/sessions");
+    const select = $("session-select");
+    select.innerHTML = "";
+    if (!data.sessions.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "暂无会话，点击「新建 playground 会话」";
+      select.appendChild(option);
+      select.disabled = true;
+      state.sessionId = "";
+      $("refresh").disabled = true;
+      $("reset").disabled = true;
+      $("close").disabled = true;
+      clearCameras();
+      return;
+    }
+    for (const session of data.sessions) {
+      const option = document.createElement("option");
+      option.value = session.session_id;
+      option.textContent = session.session_id.slice(0, 18) + " · " +
+        session.phase + "/" + session.mode + " · " + session.state;
+      select.appendChild(option);
+    }
+    select.disabled = false;
+    const target = selected || state.sessionId;
+    const exists = data.sessions.some((session) => session.session_id === target);
+    select.value = exists ? target : data.sessions[0].session_id;
+    await selectSession(select.value);
+  }
+
+  async function selectSession(id) {
+    if (!id || id === state.sessionId) {
+      if (id) await tick();
+      return;
+    }
+    state.sessionId = id;
+    sessionStorage.setItem("simRuntimeSession", id);
+    $("session-select").value = id;
+    clearCameras();
+    $("refresh").disabled = false;
+    $("reset").disabled = false;
+    $("close").disabled = false;
+    await tick();
+    schedule();
+  }
+
+  async function connect(token) {
+    state.token = token.trim();
+    sessionStorage.setItem("simRuntimeToken", state.token);
+    setError("");
+    $("connect").disabled = true;
+    try {
+      await refreshSessions(sessionStorage.getItem("simRuntimeSession") || "");
+      $("seed").disabled = false;
+      $("create").disabled = false;
+      schedule();
+    } finally {
+      $("connect").disabled = false;
+    }
+  }
+
+  $("connect-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await connect($("token").value);
+    } catch (err) {
+      stopPolling();
+      setError(err.message);
+    }
+  });
+
+  $("session-select").addEventListener("change", async (event) => {
+    try {
+      await selectSession(event.target.value);
+    } catch (err) {
+      setError(err.message);
+    }
+  });
+
+  $("refresh").addEventListener("click", async () => {
+    try {
+      await refreshSessions(state.sessionId);
+      setError("");
+    } catch (err) {
+      setError(err.message);
+    }
+  });
+
+  $("create").addEventListener("click", async () => {
+    if (state.busy) return;
+    state.busy = true;
+    $("create").disabled = true;
+    setError("");
+    try {
+      const body = {
+        phase: "playground",
+        mode: "typed",
+        seed: Number($("seed").value) || 0,
+      };
+      const data = await api("/v1/sessions", { method: "POST", body: JSON.stringify(body) });
+      await refreshSessions(data.session.session_id);
+    } catch (err) {
+      setError("新建会话失败：" + err.message);
+    } finally {
+      state.busy = false;
+      $("create").disabled = false;
+    }
+  });
+
+  $("reset").addEventListener("click", async () => {
+    if (!state.sessionId || state.busy) return;
+    state.busy = true;
+    try {
+      await api("/v1/sessions/" + encodeURIComponent(state.sessionId) + "/reset", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      state.sequence = null;
+      await tick();
+      setError("");
+    } catch (err) {
+      setError("重置失败：" + err.message);
+    } finally {
+      state.busy = false;
+    }
+  });
+
+  $("close").addEventListener("click", async () => {
+    if (!state.sessionId || state.busy) return;
+    if (!confirm("关闭当前会话？关闭后不能继续步进。")) return;
+    state.busy = true;
+    try {
+      await api("/v1/sessions/" + encodeURIComponent(state.sessionId) + "/close", {
+        method: "POST",
+        body: JSON.stringify({ reason: "closed_from_viewer" }),
+      });
+      await refreshSessions(state.sessionId);
+      setError("");
+    } catch (err) {
+      setError("关闭失败：" + err.message);
+    } finally {
+      state.busy = false;
+    }
+  });
+
+  $("auto").addEventListener("change", schedule);
+  $("interval").addEventListener("change", schedule);
+
+  window.addEventListener("beforeunload", stopPolling);
+
+  const savedToken = sessionStorage.getItem("simRuntimeToken");
+  if (savedToken) {
+    $("token").value = savedToken;
+    connect(savedToken).catch((err) => setError(err.message));
+  }
+})();
+</script>
+</body>
+</html>

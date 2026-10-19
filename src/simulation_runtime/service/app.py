@@ -10,11 +10,12 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Header, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -36,6 +37,7 @@ LOGGER = logging.getLogger("simulation_runtime.service")
 
 MAX_BODY_BYTES = 2 * 1024 * 1024
 MAX_IDEMPOTENCY_KEY = 200
+VIEWER_PAGE = Path(__file__).with_name("viewer.html")
 
 
 class CreateSessionRequest(BaseModel):
@@ -253,6 +255,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def get_manager(request: Request) -> SessionManager:
         return request.app.state.manager
+
+    @app.get("/", include_in_schema=False)
+    def index() -> RedirectResponse:
+        return RedirectResponse(url="/viewer", status_code=307)
+
+    @app.get("/viewer", response_class=HTMLResponse, include_in_schema=False)
+    def viewer() -> HTMLResponse:
+        return HTMLResponse(
+            VIEWER_PAGE.read_text(encoding="utf-8"),
+            headers={
+                "Cache-Control": "no-store",
+                "Content-Security-Policy": (
+                    "default-src 'self'; img-src 'self' blob: data:; "
+                    "style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
+                    "connect-src 'self'; frame-ancestors 'none'"
+                ),
+                "X-Content-Type-Options": "nosniff",
+                "X-Frame-Options": "DENY",
+                "Referrer-Policy": "no-referrer",
+            },
+        )
 
     @app.get("/healthz")
     def healthz() -> dict[str, Any]:

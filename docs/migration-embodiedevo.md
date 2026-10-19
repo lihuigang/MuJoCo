@@ -114,4 +114,4 @@ client.execute(session_id, code)
 - 服务协议版本是 `simulation-runtime/v1`；`/v1/capabilities` 返回 `protocol` 和 `service_version`，客户端应在启动时校验。
 - `POST /close` 之后会话不可复用；评测循环应每个 episode 创建新会话。
 - 服务重启会中断所有活动会话；客户端需要检测 `session_interrupted` 并重新创建。
-- 当前没有 live viewer 和视频工件，`features.live_viewer=false`。
+- 服务自带只读查看页 `/viewer`（轮询 PNG 快照，双相机），但没有视频工件和失败自动回放；`features.live_viewer=true`。

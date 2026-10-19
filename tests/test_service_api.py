@@ -300,3 +300,19 @@ def test_execution_timeout_interrupts_without_replay(tmp_path):
         )
         assert again.status_code == 409
         assert again.json()["error"]["code"] == "session_interrupted"
+
+
+def test_viewer_page_is_served_without_auth(client):
+    redirect = client.get("/", follow_redirects=False)
+    assert redirect.status_code == 307
+    assert redirect.headers["location"] == "/viewer"
+    page = client.get("/viewer")
+    assert page.status_code == 200
+    assert page.headers["content-type"].startswith("text/html")
+    assert page.headers["cache-control"] == "no-store"
+    assert "frame-ancestors 'none'" in page.headers["content-security-policy"]
+    assert page.headers["x-frame-options"] == "DENY"
+    assert "Simulation Runtime" in page.text
+    assert "wrist_cam" in page.text
+    assert "Authorization" in page.text
+    assert client.get("/v1/sessions").status_code == 401

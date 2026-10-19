@@ -235,7 +235,7 @@ class SessionManager:
                 "exec": policy.allows("exec"),
                 "artifact_download": True,
                 "async_operations": True,
-                "live_viewer": False,
+                "live_viewer": True,
             },
             "limits": {
                 "max_sessions_per_project": policy.max_sessions

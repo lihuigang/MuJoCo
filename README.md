@@ -103,6 +103,22 @@ print(get_instruction())
 
 `exec` 程序只能使用 `get_instruction`、`get_observation`、`step`、`reset` 四个原语以及受限的 `numpy`/`math`。它**不是安全边界**，只适用于可信团队，详见 `docs/security.md`。
 
+## 浏览器查看画面
+
+服务内置轻量查看页，不需要安装前端依赖。启动服务后打开：
+
+```text
+http://127.0.0.1:8080/viewer
+```
+
+输入项目令牌后即可选择已有会话，或直接新建 playground 会话；页面每 0.5–2 秒拉取最新观测，并排显示 `top_cam` / `wrist_cam` 两路画面，同时展示成功状态、动作预算和观测序号，还支持重置与关闭会话。
+
+![查看页](docs/viewer-screenshot.png)
+
+- 页面本身无鉴权，但所有数据请求都带 `Authorization: Bearer`，令牌只保存在当前标签页的 `sessionStorage`，不会写入服务端或 URL。
+- 查看是被动的：画面随 SDK / Agent 驱动的会话更新；页面不会自动步进。
+- Docker 部署时，compose 默认只绑定 `127.0.0.1:8080`。若浏览器在另一台机器，请通过 `deploy/nginx.conf.example` 的反向代理访问，或自行调整端口绑定并确保只在内网暴露。
+
 ## HTTP API
 
 所有 `/v1` 接口需要 `Authorization: Bearer <project-token>`。
@@ -111,6 +127,7 @@ print(get_instruction())
 | --- | --- | --- |
 | GET | `/healthz` | 存活探针（无鉴权） |
 | GET | `/readyz` | 后端/存储就绪探针（无鉴权） |
+| GET | `/viewer` | 浏览器查看页（页面无鉴权，数据请求需令牌） |
 | GET | `/v1/capabilities` | 后端、任务、动作 schema、限制 |
 | POST | `/v1/sessions` | 创建会话，返回会话与初始观测 |
 | GET | `/v1/sessions` | 列出本项目会话 |
@@ -163,6 +180,8 @@ cd deploy
 cp tokens.example.json tokens.json             # 写入真实令牌
 docker compose up -d --build
 ```
+
+启动后浏览 `http://127.0.0.1:8080/viewer` 即可查看仿真画面（输入项目令牌）。
 
 TLS 由外层反向代理终止（示例 `deploy/nginx.conf.example`），不要直接暴露明文端口。详见 `docs/deployment.md`。
 

@@ -1,6 +1,6 @@
 # HTTP API (`simulation-runtime/v1`)
 
-Base URL 由部署决定，例如 `https://sim.example.internal`。除 `/healthz`、`/readyz` 外，所有接口要求：
+Base URL 由部署决定，例如 `https://sim.example.internal`。除静态页面 `/`、`/viewer` 与探针 `/healthz`、`/readyz` 外，所有接口要求：
 
 ```
 Authorization: Bearer <project-token>
@@ -29,6 +29,12 @@ Authorization: Bearer <project-token>
 ### `GET /readyz`
 
 检查启用的后端能否加载、SQLite 能否查询。就绪返回 `200 {"ok": true}`；否则 `503 {"ok": false, "errors": {...}}`。
+
+## 查看页面
+
+### `GET /`、`GET /viewer`
+
+`/` 重定向到 `/viewer`。页面本身无鉴权（只返回静态 HTML），但页面内的数据请求仍按下方约定携带 Bearer 令牌。页面保存在浏览器标签页的 `sessionStorage` 中，不会出现在 URL 或服务端日志里。它轮询会话状态与最新观测，并排显示 `top_cam` / `wrist_cam`，支持新建 playground 会话、重置和关闭。
 
 ## 能力
 
@@ -74,7 +80,7 @@ Authorization: Bearer <project-token>
     }
   ],
   "session_modes": ["typed", "exec"],
-  "features": {"exec": true, "artifact_download": true, "async_operations": true, "live_viewer": false},
+  "features": {"exec": true, "artifact_download": true, "async_operations": true, "live_viewer": true},
   "limits": {"max_sessions_per_project": 2, "execution_timeout_sec": 60.0, "request_wait_sec": 10.0}
 }
 ```

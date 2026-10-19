@@ -57,6 +57,7 @@
 - 建议只在内网/专线可达，必要时加 mTLS 或 IP allowlist。
 - 服务自身不做 TLS、不做速率限制；请在代理层配置请求体上限（应用内也有 2 MiB 拒绝）和速率限制。
 - 健康探针 `/healthz`、`/readyz` 无鉴权，只暴露最小状态。
+- `/viewer` 只返回静态 HTML，数据仍走 Bearer 鉴权；令牌保存在浏览器标签页的 `sessionStorage`，不进入 URL、服务端或日志。页面已设置 CSP、`X-Frame-Options: DENY` 与 `Referrer-Policy: no-referrer`，且不加载任何第三方资源。
 
 ## 进程与数据
 
@@ -77,4 +78,4 @@
 - 没有每会话容器、cgroup、内存/CPU 限额。
 - 没有速率限制、审计日志导出、细粒度操作权限。
 - 单实例 SQLite，不支持多副本/水平扩展。
-- 没有实时 viewer、视频工件与失败自动回放。
+- viewer 为轮询 PNG 快照，没有视频流、视频工件与失败自动回放。

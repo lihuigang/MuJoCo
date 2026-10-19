@@ -34,6 +34,7 @@ docker compose logs -f simulation-runtime
 - 数据保存在命名卷 `deploy_runtime-data`；令牌以只读方式挂载。
 - 健康检查请求 `/readyz`；首次启动需要加载 MuJoCo 后端。
 - 容器内设置 `MUJOCO_GL=egl`。若宿主机/驱动不支持 EGL，将环境变量改为 `osmesa`（镜像已安装 `libosmesa6`），或挂载可用 GPU 驱动。
+- 浏览器查看页：`http://127.0.0.1:8080/viewer`，输入令牌后选择或新建会话即可看到双相机画面。若浏览器不在宿主机上，请通过第 3 节的反向代理访问 `https://<域名>/viewer`，不要把明文端口直接暴露到公网。
 
 手动验证：
 
