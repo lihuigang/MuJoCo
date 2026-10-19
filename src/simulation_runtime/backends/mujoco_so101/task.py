@@ -31,6 +31,37 @@ IMAGE_SIZE = (320, 320)
 ASSET_DIR = Path(__file__).resolve().parent / "assets" / MODEL_NAME
 
 
+def _quat_conjugate(quat):
+    return np.array([quat[0], -quat[1], -quat[2], -quat[3]], dtype=np.float64)
+
+
+def _quat_multiply(left, right):
+    lw, lx, ly, lz = left
+    rw, rx, ry, rz = right
+    return np.array(
+        [
+            lw * rw - lx * rx - ly * ry - lz * rz,
+            lw * rx + lx * rw + ly * rz - lz * ry,
+            lw * ry - lx * rz + ly * rw + lz * rx,
+            lw * rz + lx * ry - ly * rx + lz * rw,
+        ],
+        dtype=np.float64,
+    )
+
+
+def _orientation_error(current, desired):
+    """World-frame rotation vector that takes current orientation to desired."""
+    error = _quat_multiply(desired, _quat_conjugate(current))
+    if error[0] < 0.0:
+        error = -error
+    vector = error[1:]
+    sine = float(np.linalg.norm(vector))
+    if sine < 1e-9:
+        return np.zeros(3)
+    angle = 2.0 * float(np.arctan2(sine, np.clip(error[0], -1.0, 1.0)))
+    return vector * (angle / sine)
+
+
 def _add_scene(xml: str) -> str:
     """Add the benchmark scene to Menagerie's robot-only MJCF."""
 
@@ -260,6 +291,9 @@ class MuJoCoSO101Session:
     def _ik_command(self, action):
         target = np.asarray(action["ee_position"], dtype=np.float64)
         gripper = np.asarray(action["ee_joint_state"], dtype=np.float64)
+        desired_quat = action.get("ee_orientation")
+        if desired_quat is not None:
+            desired_quat = np.asarray(desired_quat, dtype=np.float64)
         desired_axis = np.array([0.0, 0.0, -1.0])
         q = self.data.qpos[self._joint_qpos].copy()
         trial = self.mujoco.MjData(self.model)
@@ -273,22 +307,37 @@ class MuJoCoSO101Session:
             self.mujoco.mj_forward(self.model, trial)
             position_error = target - trial.site_xpos[self._ee_site]
             rotation = trial.site_xmat[self._ee_site].reshape(3, 3)
-            tool_axis = rotation[:, 0]
-            axis_error = desired_axis - tool_axis
-            if np.linalg.norm(position_error) < 1e-3 and np.linalg.norm(axis_error) < 1e-2:
+            axis_error = None
+            orientation_error = None
+            if desired_quat is None:
+                tool_axis = rotation[:, 0]
+                axis_error = desired_axis - tool_axis
+                orientation_ok = np.linalg.norm(axis_error) < 1e-2
+            else:
+                current_quat = np.empty(4, dtype=np.float64)
+                self.mujoco.mju_mat2Quat(current_quat, rotation.ravel())
+                orientation_error = _orientation_error(current_quat, desired_quat)
+                orientation_ok = np.linalg.norm(orientation_error) < 1e-2
+            if np.linalg.norm(position_error) < 1e-3 and orientation_ok:
                 break
             self.mujoco.mj_jacSite(self.model, trial, jac_pos, jac_rot, self._ee_site)
             position_jacobian = jac_pos[:, self._joint_dofs]
-            skew_axis = np.array(
-                [
-                    [0.0, -tool_axis[2], tool_axis[1]],
-                    [tool_axis[2], 0.0, -tool_axis[0]],
-                    [-tool_axis[1], tool_axis[0], 0.0],
-                ]
-            )
-            axis_jacobian = -skew_axis @ jac_rot[:, self._joint_dofs]
-            jacobian = np.vstack((position_jacobian, 0.2 * axis_jacobian))
-            error = np.concatenate((position_error, 0.2 * axis_error))
+            if orientation_error is None:
+                skew_axis = np.array(
+                    [
+                        [0.0, -tool_axis[2], tool_axis[1]],
+                        [tool_axis[2], 0.0, -tool_axis[0]],
+                        [-tool_axis[1], tool_axis[0], 0.0],
+                    ]
+                )
+                axis_jacobian = -skew_axis @ jac_rot[:, self._joint_dofs]
+                jacobian = np.vstack((position_jacobian, 0.2 * axis_jacobian))
+                error = np.concatenate((position_error, 0.2 * axis_error))
+            else:
+                jacobian = np.vstack(
+                    (position_jacobian, 0.5 * jac_rot[:, self._joint_dofs])
+                )
+                error = np.concatenate((position_error, 0.5 * orientation_error))
             normal = jacobian.T @ jacobian + 1e-4 * np.eye(len(ARM_JOINTS))
             dq = np.linalg.solve(normal, jacobian.T @ error)
             q += np.clip(dq, -0.08, 0.08)
@@ -301,7 +350,10 @@ class MuJoCoSO101Session:
         keys = set(action)
         if keys == {"arm_joint_state", "ee_joint_state"}:
             self._joint_command(action)
-        elif keys == {"ee_position", "ee_joint_state"}:
+        elif keys in (
+            {"ee_position", "ee_joint_state"},
+            {"ee_position", "ee_orientation", "ee_joint_state"},
+        ):
             self._ik_command(action)
         else:
             raise InvalidAction("unsupported SO-101 action")

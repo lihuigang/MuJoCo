@@ -117,7 +117,28 @@ def test_invalid_actions_are_rejected():
         session.apply_action({"ee_position": [0, 0], "ee_joint_state": [1]})
     with pytest.raises(InvalidAction):
         session.apply_action({"ee_position": [0, 0, 0], "ee_joint_state": [2]})
+    with pytest.raises(InvalidAction):
+        session.apply_action(
+            {
+                "ee_position": [0, 0, 0],
+                "ee_orientation": [0, 0, 0, 0],
+                "ee_joint_state": [1],
+            }
+        )
     assert session.control_steps == 0
+
+
+def test_ik_orientation_target_is_accepted():
+    session = make_session()
+    transition = session.apply_action(
+        {
+            "ee_position": [0, 0, 0.2],
+            "ee_orientation": [2.0, 0, 0, 0],
+            "ee_joint_state": [1],
+        }
+    )
+    assert transition is not None
+    assert session.control_steps == 1
 
 
 def test_sandbox_rejects_unsafe_programs():

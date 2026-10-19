@@ -97,6 +97,8 @@ with client.session(
     print(result["success"], result["native_steps_remaining"])
 ```
 
+IK 动作可选传 `ee_orientation`（四元数 `[w, x, y, z]`）同时控制末端姿态；省略时保持工具轴朝下。需要精确多关节姿态时使用 `joint` 动作模式。完整观测中的 `ee_pose` 为 `[x, y, z, qw, qx, qy, qz]`。
+
 受限程序模式：
 
 ```python

@@ -57,6 +57,12 @@ class MuJoCoSO101Backend:
                     "name": "ik",
                     "fields": {
                         "ee_position": {"shape": [3], "unit": "m", "frame": "world"},
+                        "ee_orientation": {
+                            "shape": [4],
+                            "unit": "quaternion (w, x, y, z)",
+                            "frame": "world",
+                            "optional": True,
+                        },
                         "ee_joint_state": {"shape": [1], "range": [0, 1], "unit": "normalized"},
                     },
                 },

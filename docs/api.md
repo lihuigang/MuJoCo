@@ -85,6 +85,12 @@ Authorization: Bearer <project-token>
           "name": "ik",
           "fields": {
             "ee_position": {"shape": [3], "unit": "m", "frame": "world"},
+            "ee_orientation": {
+              "shape": [4],
+              "unit": "quaternion (w, x, y, z)",
+              "frame": "world",
+              "optional": true
+            },
             "ee_joint_state": {"shape": [1], "range": [0, 1], "unit": "normalized"}
           }
         }
@@ -189,13 +195,25 @@ Authorization: Bearer <project-token>
 {"action": {"arm_joint_state": [0, -0.4, 0.4, 0, 0], "ee_joint_state": [1.0]}}
 ```
 
-或 IK：
+或 IK（只给位置，工具轴固定朝下）：
 
 ```json
 {"action": {"ee_position": [0.2, -0.1, 0.1], "ee_joint_state": [1.0]}}
 ```
 
-动作键必须**恰好**是上述两组之一；向量长度、有限值、夹爪 `[0,1]` 会被校验。错误返回 `422 invalid_action`（同步校验）或操作失败 `invalid_action`。
+或 IK + 末端姿态（四元数 `w, x, y, z`，会先归一化）：
+
+```json
+{"action": {
+  "ee_position": [0.2, -0.1, 0.1],
+  "ee_orientation": [0.7071, 0.0, 0.0, 0.7071],
+  "ee_joint_state": [1.0]
+}}
+```
+
+`ee_orientation` 为可选字段。省略时保持工具轴朝下的固定姿态；提供时 IK 同时求解位置与姿态，若目标超出关节可达范围会返回最接近的姿态。观测中的 `ee_pose` 为 `[x, y, z, qw, qx, qy, qz]`，可直接作为姿态闭环的反馈。
+
+动作键必须是上述三种形式之一；向量长度、有限值、夹爪 `[0,1]`、四元数非零会被校验。错误返回 `422 invalid_action`（同步校验）或操作失败 `invalid_action`。
 
 成功响应（`200`）是一个 operation：
 

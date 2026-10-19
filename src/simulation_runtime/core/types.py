@@ -22,6 +22,9 @@ ARM_JOINTS = (
 # the same schema so clients do not need to hard-code simulator internals.
 JOINT_ACTION_KEYS = frozenset({"arm_joint_state", "ee_joint_state"})
 IK_ACTION_KEYS = frozenset({"ee_position", "ee_joint_state"})
+IK_ORIENTED_ACTION_KEYS = frozenset(
+    {"ee_position", "ee_orientation", "ee_joint_state"}
+)
 
 
 def _finite_vector(value: Any, name: str, length: int) -> np.ndarray:
@@ -43,15 +46,22 @@ def validate_action(action: Any) -> dict[str, np.ndarray]:
         if not 0.0 <= gripper[0] <= 1.0:
             raise InvalidAction("ee_joint_state must be normalized to [0, 1]")
         return {"arm_joint_state": arm, "ee_joint_state": gripper}
-    if keys == IK_ACTION_KEYS:
+    if keys in (IK_ACTION_KEYS, IK_ORIENTED_ACTION_KEYS):
         position = _finite_vector(action["ee_position"], "ee_position", 3)
         gripper = _finite_vector(action["ee_joint_state"], "ee_joint_state", 1)
         if not 0.0 <= gripper[0] <= 1.0:
             raise InvalidAction("ee_joint_state must be normalized to [0, 1]")
-        return {"ee_position": position, "ee_joint_state": gripper}
+        result = {"ee_position": position, "ee_joint_state": gripper}
+        if "ee_orientation" in action:
+            quat = _finite_vector(action["ee_orientation"], "ee_orientation", 4)
+            norm = float(np.linalg.norm(quat))
+            if norm < 1e-8:
+                raise InvalidAction("ee_orientation must be a nonzero quaternion")
+            result["ee_orientation"] = quat / norm
+        return result
     raise InvalidAction(
         "Expected joint keys ['arm_joint_state', 'ee_joint_state'] or "
-        "IK keys ['ee_position', 'ee_joint_state']"
+        "IK keys ['ee_position', 'ee_joint_state'] with optional 'ee_orientation'"
     )
 
 
