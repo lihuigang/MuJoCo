@@ -3,6 +3,8 @@
 独立、项目化的机器人仿真服务。将 SO-101 / MuJoCo 仿真能力从 EmbodiedEvo 中解耦出来，任何项目都可以通过 HTTP API 或 Python SDK 使用，无需拷贝 EmbodiedEvo 仓库或 MuJoCo 资产。
 
 > 当前版本 `0.1.0`，第一阶段（单机部署、进程级会话隔离）。接口协议：`simulation-runtime/v1`。
+>
+> 离线使用手册（PDF）：[docs/simulation-runtime-guide.pdf](docs/simulation-runtime-guide.pdf)
 
 ## 能力概览
 
