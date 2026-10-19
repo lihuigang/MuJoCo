@@ -27,7 +27,7 @@ HOME = np.array([0.0, -0.565, 0.284, 1.631, 0.0], dtype=np.float64)
 CONTROL_HZ = 20.0
 PHYSICS_STEPS = 10
 NATIVE_ACTION_LIMIT = 300
-IMAGE_SIZE = (256, 256)
+IMAGE_SIZE = (320, 320)
 ASSET_DIR = Path(__file__).resolve().parent / "assets" / MODEL_NAME
 
 

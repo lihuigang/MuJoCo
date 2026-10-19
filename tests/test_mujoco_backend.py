@@ -25,7 +25,7 @@ def test_native_reset_step_and_render():
         assert observation.instruction
         for name in ("top_cam", "wrist_cam"):
             frame = observation.vision[name]
-            assert frame.shape == (256, 256, 3)
+            assert frame.shape == (320, 320, 3)
             assert frame.dtype.name == "uint8"
         assert observation.state["arm_joint_state"].shape == (5,)
         assert observation.state["ee_joint_state"].shape == (1,)
@@ -36,7 +36,7 @@ def test_native_reset_step_and_render():
                 "ee_joint_state": [1.0],
             }
         )
-        assert transition.observation.vision["top_cam"].shape == (256, 256, 3)
+        assert transition.observation.vision["top_cam"].shape == (320, 320, 3)
         assert isinstance(transition.success, bool)
     finally:
         native.close()
@@ -65,6 +65,6 @@ def test_exec_program_can_read_observation_and_step():
         assert result.ok, result.error
         assert result.native_steps_used == 1
         assert "ee_pose" in result.stdout
-        assert result.observation["vision"]["top_cam"].shape == (256, 256, 3)
+        assert result.observation["vision"]["top_cam"].shape == (320, 320, 3)
     finally:
         session.close()

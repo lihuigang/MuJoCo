@@ -68,8 +68,8 @@ Authorization: Bearer <project-token>
           "native_action_limit": 300,
           "control_hz": 20.0,
           "cameras": [
-            {"name": "top_cam", "width": 256, "height": 256, "media_type": "image/png"},
-            {"name": "wrist_cam", "width": 256, "height": 256, "media_type": "image/png"}
+            {"name": "top_cam", "width": 320, "height": 320, "media_type": "image/png"},
+            {"name": "wrist_cam", "width": 320, "height": 320, "media_type": "image/png"}
           ]
         }
       ],
@@ -320,8 +320,8 @@ Authorization: Bearer <project-token>
       "artifact_id": "art_...",
       "href": "/v1/artifacts/art_...",
       "media_type": "image/png",
-      "width": 256,
-      "height": 256
+      "width": 320,
+      "height": 320
     }
   }
 }

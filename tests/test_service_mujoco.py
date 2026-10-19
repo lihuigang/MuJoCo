@@ -34,7 +34,8 @@ def test_mujoco_session_over_http(tmp_path):
         created = response.json()
         session_id = created["session"]["session_id"]
         observation = created["observation"]
-        assert observation["cameras"]["top_cam"]["width"] == 256
+        assert observation["cameras"]["top_cam"]["width"] == 320
+        assert observation["cameras"]["top_cam"]["height"] == 320
         assert observation["instruction"].startswith("Pick up the red cube")
 
         step = client.post(
