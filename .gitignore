@@ -12,3 +12,5 @@ examples/output/
 deploy/tokens.json
 deploy/data/
 .DS_Store
+
+deploy/.env

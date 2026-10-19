@@ -43,6 +43,14 @@ docker compose logs -f simulation-runtime
 - 容器内设置 `MUJOCO_GL=egl`。若宿主机/驱动不支持 EGL，将环境变量改为 `osmesa`（镜像已安装 `libosmesa6`），或挂载可用 GPU 驱动。
 - 浏览器查看页：`http://127.0.0.1:8080/viewer`，免令牌模式下直接选择或新建会话即可看到双相机画面。若浏览器不在宿主机上，请通过第 3 节的反向代理访问 `https://<域名>/viewer`，不要在免令牌模式下把明文端口直接暴露到公网。
 
+局域网直接访问时，用 `SIM_RUNTIME_PUBLISH` 覆盖默认的回环绑定：
+
+```bash
+SIM_RUNTIME_PUBLISH=0.0.0.0:8080:8080 docker compose up -d
+```
+
+若宿主机 8080 已被占用，改成其他端口，例如 `0.0.0.0:18080:8080`，再访问 `http://<服务器IP>:18080/viewer`。免令牌模式下同一网络内任何人都有完整控制权，请只在可信内网使用。
+
 手动验证：
 
 ```bash

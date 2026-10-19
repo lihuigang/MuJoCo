@@ -192,7 +192,7 @@ cd deploy
 docker compose up -d --build
 ```
 
-启动后浏览 `http://127.0.0.1:8080/viewer` 即可查看仿真画面，无需输入令牌。需要项目隔离时，在 `deploy/docker-compose.yml` 中把 `SIM_RUNTIME_AUTH_MODE` 改为 `token`，并将 `tokens.json` 以只读方式挂载到 `/run/secrets/tokens.json`，同时设置 `SIM_RUNTIME_TOKENS_FILE=/run/secrets/tokens.json`。
+启动后浏览 `http://127.0.0.1:8080/viewer` 即可查看仿真画面，无需输入令牌。局域网直接访问时用 `SIM_RUNTIME_PUBLISH=0.0.0.0:8080:8080 docker compose up -d` 覆盖默认的回环绑定；8080 被占用时改成其他端口（如 `0.0.0.0:18080:8080`）。需要项目隔离时，在 `deploy/docker-compose.yml` 中把 `SIM_RUNTIME_AUTH_MODE` 改为 `token`，并将 `tokens.json` 以只读方式挂载到 `/run/secrets/tokens.json`，同时设置 `SIM_RUNTIME_TOKENS_FILE=/run/secrets/tokens.json`。
 
 TLS 由外层反向代理终止（示例 `deploy/nginx.conf.example`）。免令牌模式下任何能访问端口的人都有完整控制权，不要把明文端口直接暴露到公网。详见 `docs/deployment.md`。
 
